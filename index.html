@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マルバツゲーム超</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --board-bg: #f0f0f0;
+            --border-color: #333;
+            --cell-bg: #fff;
+            --cell-hover-bg: #e9e9e9;
+            --player-x-color: #e74c3c;
+            --player-o-color: #3498db;
+            --playable-glow: 0 0 12px rgba(46, 204, 113, 0.9);
+            --font-family-jp: 'Noto Sans JP', sans-serif;
+            --font-family-en: 'Poppins', sans-serif;
+            --mark-stroke-width: 10px;
+        }
+
+        body {
+            font-family: var(--font-family-en), var(--font-family-jp);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: var(--board-bg);
+            margin: 0;
+            color: #333;
+        }
+
+        .game-container {
+            text-align: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        #status-area {
+            margin-bottom: 20px;
+            min-height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #status-text {
+            font-size: 1.5rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        #global-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 90vw;
+            height: 90vw;
+            max-width: 600px;
+            max-height: 600px;
+            border: 5px solid var(--border-color);
+            background-color: var(--border-color);
+            gap: 5px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .local-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            background-color: var(--border-color);
+            gap: 3px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .local-board.playable {
+            box-shadow: var(--playable-glow);
+            transform: scale(1.02);
+        }
+
+        .local-board.won::after {
+            content: attr(data-winner);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 10vmin;
+            font-weight: 700;
+            background-color: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(2px);
+            color: var(--border-color);
+            animation: fadeIn 0.5s ease;
+        }
+
+        .local-board.won.X::after { color: var(--player-x-color); }
+        .local-board.won.O::after { color: var(--player-o-color); }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.5); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .cell {
+            background-color: var(--cell-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            user-select: none;
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .local-board.playable .cell:not(.X):not(.O):hover {
+            background-color: var(--cell-hover-bg);
+        }
+
+        .cell.O::before {
+            content: '';
+            position: absolute;
+            width: 65%;
+            height: 65%;
+            border: var(--mark-stroke-width) solid var(--player-o-color);
+            border-radius: 50%;
+            box-sizing: border-box;
+            animation: draw-mark 0.3s ease-out;
+        }
+
+        .cell.X::before,
+        .cell.X::after {
+            content: '';
+            position: absolute;
+            width: 75%;
+            height: var(--mark-stroke-width);
+            background-color: var(--player-x-color);
+            border-radius: 5px;
+            animation: draw-mark 0.3s ease-out;
+        }
+
+        .cell.X::before { transform: rotate(45deg); }
+        .cell.X::after { transform: rotate(-45deg); }
+
+        @keyframes draw-mark {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        #reset-button {
+            margin-top: 25px;
+            padding: 12px 25px;
+            font-size: 1.1rem;
+            font-family: var(--font-family-en), var(--font-family-jp);
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #34495e;
+            color: white;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        #reset-button:hover {
+            background-color: #2c3e50;
+            transform: translateY(-2px);
+        }
+        
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 100;
+            opacity: 1;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+            visibility: visible;
+        }
+
+        .overlay:not(.active) {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .modal {
+            background-color: white; padding: 30px 40px; border-radius: 15px;
+            text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+
+        #title-screen-overlay .modal h1 { font-size: 3rem; margin-bottom: 30px; }
+
+        #start-game-button {
+            padding: 15px 40px; font-size: 1.5rem; cursor: pointer;
+            border: none; border-radius: 10px; background-color: var(--player-o-color);
+            color: white; font-weight: bold; transition: all 0.3s ease;
+        }
+        
+        #start-game-button:hover { background-color: #2980b9; transform: scale(1.05); }
+
+        .coin-toss-modal h2 { margin-top: 0; font-size: 2rem; }
+        
+        /* --- ▼▼▼ AIモード選択のスタイルを追加 ▼▼▼ --- */
+        #game-mode-selection { margin-bottom: 20px; }
+        .mode-button {
+            padding: 10px 20px; font-size: 1rem; cursor: pointer;
+            border: 2px solid #ccc; border-radius: 8px; background-color: #f0f0f0;
+            margin: 0 10px; transition: all 0.3s ease;
+        }
+        .mode-button.active {
+            background-color: var(--player-o-color); color: white; border-color: var(--player-o-color);
+        }
+        /* --- ▲▲▲ ここまで ▲▲▲ --- */
+
+        .player-inputs {
+            display: flex; justify-content: space-around; gap: 15px; margin: 20px 0;
+        }
+        .input-group {
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .input-group label { margin-bottom: 5px; font-weight: bold; color: #555; }
+        .input-group input {
+            padding: 8px; border: 2px solid #ccc; border-radius: 5px;
+            text-align: center; width: 120px; font-size: 1rem; transition: border-color 0.3s ease;
+        }
+        .input-group input:focus { outline: none; border-color: var(--player-o-color); }
+        #coin {
+            position: relative; margin: 20px auto; width: 100px; height: 100px;
+            cursor: default; transform-style: preserve-3d;
+            transition: transform 1s cubic-bezier(0.5, 0, 0.5, 1);
+        }
+        #coin.flipping { transform: rotateY(1800deg); }
+        #coin .side-a, #coin .side-b {
+            position: absolute; width: 100px; height: 100px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 1.5rem; font-weight: bold; color: #333; backface-visibility: hidden;
+        }
+        #coin .side-a { background-color: #ffd700; transform: translateZ(2px); }
+        #coin .side-b { background-color: #c0c0c0; transform: rotateY(180deg) translateZ(2px); }
+        #coin-result-text { min-height: 24px; font-size: 1.2rem; font-weight: bold; }
+        #toss-button {
+            margin-top: 10px; padding: 10px 20px; font-size: 1rem;
+            font-family: var(--font-family-en), var(--font-family-jp); font-weight: 500;
+            cursor: pointer; border: none; border-radius: 8px; background-color: #27ae60;
+            color: white; transition: background-color 0.3s ease;
+        }
+        #toss-button:hover { background-color: #229954; }
+        #toss-button:disabled { background-color: #95a5a6; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div id="title-screen-overlay" class="overlay active">
+            <div class="modal">
+                <h1>マルバツゲーム超</h1>
+                <button id="start-game-button">ゲーム開始</button>
+            </div>
+        </div>
+
+        <div id="coin-toss-overlay" class="overlay">
+            <div class="modal coin-toss-modal">
+                <h2>ゲーム設定</h2>
+                
+                <div id="game-mode-selection">
+                    <button id="mode-human-btn" class="mode-button active">人間と対戦</button>
+                    <button id="mode-ai-btn" class="mode-button">AIと対戦</button>
+                </div>
+                <div class="player-inputs">
+                    <div class="input-group">
+                        <label for="playerXNameInput">プレイヤー1 (X)</label>
+                        <input type="text" id="playerXNameInput" placeholder="プレイヤーX">
+                    </div>
+                    <div id="player-o-input-group" class="input-group">
+                        <label for="playerONameInput">プレイヤー2 (O)</label>
+                        <input type="text" id="playerONameInput" placeholder="プレイヤーO">
+                    </div>
+                </div>
+                <p>名前を決めたら、コインを投げて先攻後攻を決めます</p>
+                <div id="coin" class="heads">
+                    <div class="side-a">表</div>
+                    <div class="side-b">裏</div>
+                </div>
+                <p id="coin-result-text"></p>
+                <button id="toss-button">投げる</button>
+            </div>
+        </div>
+
+        <div id="status-area">
+            <p id="status-text"></p>
+        </div>
+        <div id="global-board"></div>
+        <button id="reset-button">ゲームをリセット</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM要素
+            const titleScreenOverlay = document.getElementById('title-screen-overlay');
+            const startGameButton = document.getElementById('start-game-button');
+            const coinTossOverlay = document.getElementById('coin-toss-overlay');
+            const modeHumanBtn = document.getElementById('mode-human-btn');
+            const modeAiBtn = document.getElementById('mode-ai-btn');
+            const playerOInputGroup = document.getElementById('player-o-input-group');
+            const globalBoardElement = document.getElementById('global-board');
+            const statusTextElement = document.getElementById('status-text');
+            const resetButton = document.getElementById('reset-button');
+            const tossButton = document.getElementById('toss-button');
+            const coinResultText = document.getElementById('coin-result-text');
+            const coinElement = document.getElementById('coin');
+            const playerXNameInput = document.getElementById('playerXNameInput');
+            const playerONameInput = document.getElementById('playerONameInput');
+
+            // 定数
+            const PLAYER_X = 'X';
+            const PLAYER_O = 'O';
+            const DRAW = 'DRAW';
+
+            // ゲーム状態変数
+            let globalBoardState, localBoardsState, currentPlayer, nextPlayableBoard, gameOver;
+            let playerXName = 'プレイヤーX';
+            let playerOName = 'プレイヤーO';
+            let gameMode = 'human'; // 'human' or 'ai'
+
+            const winningCombinations = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]
+            ];
+
+            function initializeGame() {
+                globalBoardState = Array(9).fill(null);
+                localBoardsState = Array(9).fill(null).map(() => Array(9).fill(null));
+                currentPlayer = null;
+                nextPlayableBoard = null;
+                gameOver = false;
+                
+                createBoard();
+                statusTextElement.textContent = '';
+                
+                titleScreenOverlay.classList.add('active');
+                coinTossOverlay.classList.remove('active');
+            }
+
+            function createBoard() {
+                globalBoardElement.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    const localBoard = document.createElement('div');
+                    localBoard.classList.add('local-board');
+                    localBoard.dataset.globalIndex = i;
+                    for (let j = 0; j < 9; j++) {
+                        const cell = document.createElement('div');
+                        cell.classList.add('cell');
+                        cell.dataset.globalIndex = i;
+                        cell.dataset.localIndex = j;
+                        localBoard.appendChild(cell);
+                    }
+                    globalBoardElement.appendChild(localBoard);
+                }
+            }
+
+            function handleStartGameClick() {
+                titleScreenOverlay.classList.remove('active');
+                coinTossOverlay.classList.add('active');
+                
+                statusTextElement.textContent = 'ゲーム設定中...';
+                coinResultText.textContent = '';
+                coinElement.classList.remove('flipping');
+                coinElement.style.transform = '';
+                tossButton.disabled = false;
+                playerXNameInput.value = playerXName;
+                playerONameInput.value = playerOName;
+            }
+
+            function handleTossClick() {
+                playerXName = playerXNameInput.value || 'プレイヤーX';
+                if (gameMode === 'human') {
+                    playerOName = playerONameInput.value || 'プレイヤーO';
+                } else {
+                    playerOName = 'AI (かんたん)';
+                }
+
+                tossButton.disabled = true;
+                const isHeads = Math.random() < 0.5;
+                coinElement.classList.add('flipping');
+
+                setTimeout(() => {
+                    coinElement.classList.remove('flipping');
+                    coinElement.style.transform = isHeads ? 'rotateY(0deg)' : 'rotateY(180deg)';
+                    
+                    currentPlayer = isHeads ? PLAYER_X : PLAYER_O;
+                    const starterName = isHeads ? playerXName : playerOName;
+                    
+                    coinResultText.textContent = `${isHeads ? '表' : '裏'}が出ました！ ${starterName}が先攻です。`;
+
+                    setTimeout(() => {
+                        coinTossOverlay.classList.remove('active');
+                        nextPlayableBoard = null;
+                        updateUI();
+                        checkAITurn(); // AIが先攻の場合の処理
+                    }, 2000);
+
+                }, 1500);
+            }
+
+            function handleCellClick(e) {
+                // AIのターン中はクリックを無視
+                if (gameMode === 'ai' && currentPlayer === PLAYER_O) return;
+                
+                if (gameOver || !e.target.classList.contains('cell')) return;
+                
+                const globalIndex = parseInt(e.target.dataset.globalIndex);
+                const localIndex = parseInt(e.target.dataset.localIndex);
+
+                makeMove(globalIndex, localIndex);
+            }
+
+            function makeMove(globalIndex, localIndex) {
+                if (gameOver) return;
+                if (nextPlayableBoard !== null && nextPlayableBoard !== globalIndex) return;
+                if (globalBoardState[globalIndex] !== null) return;
+                if (localBoardsState[globalIndex][localIndex] !== null) return;
+
+                localBoardsState[globalIndex][localIndex] = currentPlayer;
+                
+                const localWinner = checkWinner(localBoardsState[globalIndex]);
+                if (localWinner) {
+                    globalBoardState[globalIndex] = localWinner;
+                    if (checkWinner(globalBoardState)) {
+                        endGame(checkWinner(globalBoardState));
+                    }
+                } else if (localBoardsState[globalIndex].every(cell => cell !== null)) {
+                    globalBoardState[globalIndex] = DRAW;
+                }
+                
+                if (!gameOver && globalBoardState.every(state => state !== null)) {
+                    endGame(DRAW);
+                }
+
+                if (!gameOver) {
+                    nextPlayableBoard = globalBoardState[localIndex] === null ? localIndex : null;
+                    switchPlayer();
+                    updateUI();
+                    checkAITurn(); // ターン交代後、AIのターンかチェック
+                }
+            }
+            
+            // --- ▼▼▼ AIの思考と行動に関する関数 ▼▼▼ ---
+            function checkAITurn() {
+                if (!gameOver && gameMode === 'ai' && currentPlayer === PLAYER_O) {
+                    // AIが少し考えているように見せる
+                    setTimeout(makeAIMove, 1000);
+                }
+            }
+
+            function makeAIMove() {
+                // 1. プレイ可能な手をすべてリストアップする
+                let availableMoves = [];
+                if (nextPlayableBoard !== null && globalBoardState[nextPlayableBoard] === null) {
+                    // プレイする盤が指定されている場合
+                    for (let i = 0; i < 9; i++) {
+                        if (localBoardsState[nextPlayableBoard][i] === null) {
+                            availableMoves.push({ global: nextPlayableBoard, local: i });
+                        }
+                    }
+                } else {
+                    // どこでもOKな場合 (フリーターン)
+                    for (let i = 0; i < 9; i++) {
+                        if (globalBoardState[i] === null) { // 勝敗が決まっていない盤で
+                            for (let j = 0; j < 9; j++) {
+                                if (localBoardsState[i][j] === null) { // 空いているセル
+                                    availableMoves.push({ global: i, local: j });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2. リストからランダムに1つ選ぶ
+                if (availableMoves.length > 0) {
+                    const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                    makeMove(randomMove.global, randomMove.local);
+                }
+            }
+            // --- ▲▲▲ ここまで ▲▲▲ ---
+
+            function checkWinner(boardState) {
+                for (const combination of winningCombinations) {
+                    const [a, b, c] = combination;
+                    if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
+                        return boardState[a];
+                    }
+                }
+                return null;
+            }
+
+            function switchPlayer() {
+                currentPlayer = currentPlayer === PLAYER_X ? PLAYER_O : PLAYER_X;
+            }
+            
+            function endGame(winner) {
+                gameOver = true;
+                if (winner === DRAW) {
+                    statusTextElement.textContent = "引き分けです！";
+                } else {
+                    const winnerName = winner === PLAYER_X ? playerXName : playerOName;
+                    statusTextElement.textContent = `${winnerName}の勝ちです！🎉`;
+                }
+            }
+
+            function updateUI() {
+                for (let i = 0; i < 9; i++) {
+                    if (globalBoardElement.children[i]) {
+                        for (let j = 0; j < 9; j++) {
+                            if (globalBoardElement.children[i].children[j]) {
+                                const cell = globalBoardElement.children[i].children[j];
+                                const mark = localBoardsState[i][j];
+                                cell.classList.remove(PLAYER_X, PLAYER_O);
+                                if (mark) { cell.classList.add(mark); }
+                            }
+                        }
+                    }
+                }
+                document.querySelectorAll('.local-board').forEach((board, index) => {
+                    board.classList.remove('playable', 'won', PLAYER_X, PLAYER_O, DRAW);
+                    const winner = globalBoardState[index];
+                    if (winner) {
+                        board.classList.add('won', winner);
+                        board.dataset.winner = winner;
+                    }
+                    if (!gameOver) {
+                        if (nextPlayableBoard === null) {
+                            if (globalBoardState[index] === null) board.classList.add('playable');
+                        } else {
+                            if (index === nextPlayableBoard) board.classList.add('playable');
+                        }
+                    }
+                });
+                if (!gameOver && currentPlayer) {
+                    const currentPlayerName = currentPlayer === PLAYER_X ? playerXName : playerOName;
+                    let nextBoardInfo = (nextPlayableBoard !== null) ? `(次のマス: ${nextPlayableBoard + 1})` : '(どこでもOK)';
+                    statusTextElement.textContent = `${currentPlayerName}さんの番です ${nextBoardInfo}`;
+                }
+            }
+            
+            // イベントリスナー
+            startGameButton.addEventListener('click', handleStartGameClick);
+            modeHumanBtn.addEventListener('click', () => {
+                gameMode = 'human';
+                modeHumanBtn.classList.add('active');
+                modeAiBtn.classList.remove('active');
+                playerOInputGroup.style.display = 'flex';
+            });
+            modeAiBtn.addEventListener('click', () => {
+                gameMode = 'ai';
+                modeAiBtn.classList.add('active');
+                modeHumanBtn.classList.remove('active');
+                playerOInputGroup.style.display = 'none';
+            });
+            globalBoardElement.addEventListener('click', handleCellClick);
+            resetButton.addEventListener('click', initializeGame);
+            tossButton.addEventListener('click', handleTossClick);
+
+            // ゲーム初期化
+            initializeGame();
+        });
+    </script>
+</body>
+</html>
