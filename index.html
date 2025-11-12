@@ -212,7 +212,6 @@
 
         .coin-toss-modal h2 { margin-top: 0; font-size: 2rem; }
         
-        /* --- ▼▼▼ AIモード選択のスタイルを追加 ▼▼▼ --- */
         #game-mode-selection { margin-bottom: 20px; }
         .mode-button {
             padding: 10px 20px; font-size: 1rem; cursor: pointer;
@@ -221,6 +220,22 @@
         }
         .mode-button.active {
             background-color: var(--player-o-color); color: white; border-color: var(--player-o-color);
+        }
+        
+        /* --- ▼▼▼ AI強さ選択のスタイルを追加 ▼▼▼ --- */
+        #ai-level-selection {
+            margin-bottom: 15px;
+            display: none; /* AIモード選択時に表示する */
+        }
+        #ai-level-selection label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        #ai-level-select {
+            padding: 5px;
+            border-radius: 5px;
+            border: 2px solid #ccc;
+            font-size: 1rem;
         }
         /* --- ▲▲▲ ここまで ▲▲▲ --- */
 
@@ -278,6 +293,14 @@
                     <button id="mode-human-btn" class="mode-button active">人間と対戦</button>
                     <button id="mode-ai-btn" class="mode-button">AIと対戦</button>
                 </div>
+                
+                <div id="ai-level-selection">
+                    <label for="ai-level-select">AIの強さ:</label>
+                    <select id="ai-level-select">
+                        <option value="easy">かんたん</option>
+                        <option value="normal">ふつう</option>
+                    </select>
+                </div>
                 <div class="player-inputs">
                     <div class="input-group">
                         <label for="playerXNameInput">プレイヤー1 (X)</label>
@@ -313,6 +336,8 @@
             const coinTossOverlay = document.getElementById('coin-toss-overlay');
             const modeHumanBtn = document.getElementById('mode-human-btn');
             const modeAiBtn = document.getElementById('mode-ai-btn');
+            const aiLevelSelection = document.getElementById('ai-level-selection');
+            const aiLevelSelect = document.getElementById('ai-level-select');
             const playerOInputGroup = document.getElementById('player-o-input-group');
             const globalBoardElement = document.getElementById('global-board');
             const statusTextElement = document.getElementById('status-text');
@@ -332,7 +357,8 @@
             let globalBoardState, localBoardsState, currentPlayer, nextPlayableBoard, gameOver;
             let playerXName = 'プレイヤーX';
             let playerOName = 'プレイヤーO';
-            let gameMode = 'human'; // 'human' or 'ai'
+            let gameMode = 'human';
+            let aiLevel = 'easy';
 
             const winningCombinations = [
                 [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6]
@@ -387,7 +413,7 @@
                 if (gameMode === 'human') {
                     playerOName = playerONameInput.value || 'プレイヤーO';
                 } else {
-                    playerOName = 'AI (かんたん)';
+                    playerOName = aiLevel === 'easy' ? 'AI (かんたん)' : 'AI (ふつう)';
                 }
 
                 tossButton.disabled = true;
@@ -407,16 +433,14 @@
                         coinTossOverlay.classList.remove('active');
                         nextPlayableBoard = null;
                         updateUI();
-                        checkAITurn(); // AIが先攻の場合の処理
+                        checkAITurn();
                     }, 2000);
 
                 }, 1500);
             }
 
             function handleCellClick(e) {
-                // AIのターン中はクリックを無視
                 if (gameMode === 'ai' && currentPlayer === PLAYER_O) return;
-                
                 if (gameOver || !e.target.classList.contains('cell')) return;
                 
                 const globalIndex = parseInt(e.target.dataset.globalIndex);
@@ -451,14 +475,14 @@
                     nextPlayableBoard = globalBoardState[localIndex] === null ? localIndex : null;
                     switchPlayer();
                     updateUI();
-                    checkAITurn(); // ターン交代後、AIのターンかチェック
+                    checkAITurn();
                 }
             }
             
             // --- ▼▼▼ AIの思考と行動に関する関数 ▼▼▼ ---
             function checkAITurn() {
                 if (!gameOver && gameMode === 'ai' && currentPlayer === PLAYER_O) {
-                    // AIが少し考えているように見せる
+                    statusTextElement.textContent = `${playerOName}が考えています...`;
                     setTimeout(makeAIMove, 1000);
                 }
             }
@@ -467,18 +491,16 @@
                 // 1. プレイ可能な手をすべてリストアップする
                 let availableMoves = [];
                 if (nextPlayableBoard !== null && globalBoardState[nextPlayableBoard] === null) {
-                    // プレイする盤が指定されている場合
                     for (let i = 0; i < 9; i++) {
                         if (localBoardsState[nextPlayableBoard][i] === null) {
                             availableMoves.push({ global: nextPlayableBoard, local: i });
                         }
                     }
                 } else {
-                    // どこでもOKな場合 (フリーターン)
                     for (let i = 0; i < 9; i++) {
-                        if (globalBoardState[i] === null) { // 勝敗が決まっていない盤で
+                        if (globalBoardState[i] === null) {
                             for (let j = 0; j < 9; j++) {
-                                if (localBoardsState[i][j] === null) { // 空いているセル
+                                if (localBoardsState[i][j] === null) {
                                     availableMoves.push({ global: i, local: j });
                                 }
                             }
@@ -486,11 +508,61 @@
                     }
                 }
 
-                // 2. リストからランダムに1つ選ぶ
-                if (availableMoves.length > 0) {
-                    const randomMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
-                    makeMove(randomMove.global, randomMove.local);
+                if (availableMoves.length === 0) return;
+
+                let move_to_make = null;
+
+                // 2. AIのレベルに応じて手を決める
+                if (aiLevel === 'normal') {
+                    move_to_make = findStrategicMove(availableMoves);
                 }
+
+                // 3. 戦略的な手がない場合、または「かんたん」モードの場合はランダムに選ぶ
+                if (move_to_make === null) {
+                    move_to_make = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                }
+                
+                makeMove(move_to_make.global, move_to_make.local);
+            }
+            
+            function findStrategicMove(availableMoves) {
+                // 1. AI (PLAYER_O) が勝てる手を探す
+                for (const move of availableMoves) {
+                    if (isWinningMove(move, PLAYER_O)) {
+                        return move;
+                    }
+                }
+                // 2. 相手 (PLAYER_X) が勝てる手を防ぐ
+                for (const move of availableMoves) {
+                    if (isWinningMove(move, PLAYER_X)) {
+                        return move;
+                    }
+                }
+                // 3. 戦略的な手が見つからなければ null を返す
+                return null;
+            }
+
+            function isWinningMove(move, player) {
+                const { global, local } = move;
+                
+                // --- その手で小盤が勝てるかシミュレーション ---
+                localBoardsState[global][local] = player; // 一時的に手を置く
+                const localWinner = checkWinner(localBoardsState[global]);
+                localBoardsState[global][local] = null; // 手を元に戻す
+                
+                if (localWinner === player) {
+                    // --- さらに、その小盤の勝利で大盤が勝てるかシミュレーション ---
+                    const originalGlobalState = globalBoardState[global];
+                    globalBoardState[global] = player; // 一時的に大盤の勝利を記録
+                    const globalWinner = checkWinner(globalBoardState);
+                    globalBoardState[global] = originalGlobalState; // 大盤の状態を元に戻す
+                    
+                    if (globalWinner === player) {
+                        return true; // 大盤の勝利に繋がる
+                    }
+                    return true; // 小盤の勝利に繋がる
+                }
+                return false;
             }
             // --- ▲▲▲ ここまで ▲▲▲ ---
 
@@ -553,20 +625,27 @@
                 }
             }
             
-            // イベントリスナー
+            // --- ▼▼▼ イベントリスナーの更新 ▼▼▼ ---
             startGameButton.addEventListener('click', handleStartGameClick);
+            
             modeHumanBtn.addEventListener('click', () => {
                 gameMode = 'human';
                 modeHumanBtn.classList.add('active');
                 modeAiBtn.classList.remove('active');
                 playerOInputGroup.style.display = 'flex';
+                aiLevelSelection.style.display = 'none'; // AIレベル選択を非表示
             });
             modeAiBtn.addEventListener('click', () => {
                 gameMode = 'ai';
                 modeAiBtn.classList.add('active');
                 modeHumanBtn.classList.remove('active');
                 playerOInputGroup.style.display = 'none';
+                aiLevelSelection.style.display = 'block'; // AIレベル選択を表示
             });
+            aiLevelSelect.addEventListener('change', (e) => {
+                aiLevel = e.target.value; // 選択されたAIレベルを記憶
+            });
+
             globalBoardElement.addEventListener('click', handleCellClick);
             resetButton.addEventListener('click', initializeGame);
             tossButton.addEventListener('click', handleTossClick);
